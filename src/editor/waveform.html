@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Waveform Editor</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body { 
+            margin: 0; 
+            background-color: #1e1e1e; 
+            color: #fff;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .editor {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            min-width: 0; /* Prevent flex items from overflowing */
+        }
+        .canvas-container {
+            flex: 1;
+            position: relative;
+            border: 1px solid #444;
+            margin-bottom: 20px;
+            height: 150px;
+            min-height: 100px;
+            max-height: 500px;
+            overflow: hidden;
+        }
+        .resize-handle {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 6px;
+            background: #444;
+            cursor: ns-resize;
+            opacity: 0.5;
+            transition: opacity 0.2s;
+        }
+        .resize-handle:hover {
+            opacity: 1;
+        }
+        canvas { 
+            background-color: #000; 
+            width: 100%;
+            height: 100%;
+        }
+        .toolbar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            padding: 0 4px;
+        }
+        .sidebar {
+            width: 300px;
+            min-width: 300px;
+            background-color: #252526;
+            padding: 20px;
+            border-left: 1px solid #444;
+            overflow-y: auto;
+            transition: transform 0.3s ease;
+            position: relative;
+            box-sizing: border-box; /* Add this to include padding in width calculation */
+        }
+        .sidebar.collapsed {
+            transform: translateX(calc(100% - 30px));
+        }
+        .sidebar-collapse-btn {
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            background: #252526;
+            border: 1px solid #444;
+            border-right: none;
+            color: #fff;
+            width: 20px;
+            height: 60px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            font-size: 14px;
+            border-radius: 4px 0 0 4px;
+        }
+        .sidebar-collapse-btn:hover {
+            background-color: #333;
+        }
+        button {
+            background-color: #0e639c;
+            color: white;
+            border: none;
+            padding: 6px;
+            cursor: pointer;
+            border-radius: 4px;
+            min-width: 32px;
+            min-height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        button i {
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #1177bb;
+        }
+        /* Add tooltip styles */
+        button {
+            position: relative;
+        }
+        button:hover::after {
+            content: attr(title);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 4px 8px;
+            background: #333;
+            color: white;
+            font-size: 12px;
+            white-space: nowrap;
+            border-radius: 4px;
+            margin-bottom: 4px;
+        }
+        .point-list {
+            margin-bottom: 20px;
+        }
+        .point-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+            padding: 8px;
+            background-color: #2d2d2d;
+            border-radius: 4px;
+            position: relative; /* For absolute positioning of delete button */
+        }
+        .point-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        .point-item input[type="text"] {
+            flex: 1;
+            min-width: 0; /* Allow input to shrink */
+        }
+        .delete-btn {
+            background: none;
+            border: none;
+            color: #888;
+            padding: 4px 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: color 0.2s;
+        }
+        .delete-btn:hover {
+            color: #f44336;
+            background: none;
+        }
+        .segment-list {
+            margin-top: 20px;
+        }
+        .segment-item {
+            padding: 8px;
+            background-color: #2d2d2d;
+            margin-bottom: 8px;
+            border-radius: 4px;
+        }
+        .scratchpad {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #2d2d2d;
+            border-radius: 4px;
+        }
+        .scratchpad textarea {
+            width: 100%;
+            min-height: 100px;
+            background-color: #1e1e1e;
+            color: #fff;
+            border: 1px solid #444;
+            border-radius: 4px;
+            padding: 8px;
+            resize: vertical;
+            font-family: inherit;
+        }
+        .scratchpad textarea:focus {
+            outline: none;
+            border-color: #0e639c;
+        }
+        .context-menu {
+            position: fixed;
+            background: #2d2d2d;
+            border: 1px solid #444;
+            border-radius: 4px;
+            padding: 8px 0;
+            min-width: 150px;
+            z-index: 1000;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+        }
+        .context-menu-item {
+            padding: 8px 16px;
+            cursor: pointer;
+            color: #fff;
+        }
+        .context-menu-item:hover {
+            background: #3d3d3d;
+        }
+        .menu-bar {
+            display: flex;
+            background-color: #f0f0f0;
+            border-bottom: 1px solid #ccc;
+            padding: 4px;
+        }
+        .menu-item {
+            position: relative;
+            padding: 4px 12px;
+            cursor: pointer;
+            user-select: none;
+            color: #000;
+        }
+        .menu-item:hover {
+            background-color: #e0e0e0;
+        }
+        .menu-item:hover .menu-dropdown {
+            display: block;
+        }
+        .menu-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background-color: white;
+            border: 1px solid #ccc;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            z-index: 1000;
+            min-width: 150px;
+        }
+        .menu-dropdown-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            color: #000;
+        }
+        .menu-dropdown-item:hover {
+            background-color: #e0e0e0;
+        }
+
+        .toast-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+
+        .toast {
+            background-color: #333;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 4px;
+            margin-top: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .toast.success {
+            background-color: #4caf50;
+        }
+
+        .toast.error {
+            background-color: #f44336;
+        }
+
+        .toast.info {
+            background-color: #2196f3;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+
+        /* Add styles for menu checkmarks */
+        .menu-dropdown-item.checked::before {
+            content: '✓';
+            position: absolute;
+            left: 8px;
+        }
+        .menu-dropdown-item {
+            position: relative;
+            padding: 8px 12px 8px 24px; /* Add left padding for checkmark */
+        }
+
+        /* Add styles for keyboard shortcuts in menu */
+        .menu-dropdown-item .shortcut {
+            float: right;
+            color: #666;
+            margin-left: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="editor">
+            <div class="menu-bar">
+                <div class="menu-item">
+                    File
+                    <div class="menu-dropdown">
+                        <div class="menu-dropdown-item" id="save-wave">Save Wave</div>
+                        <div class="menu-dropdown-item" id="load-wave">Load Wave</div>
+                        <div class="menu-dropdown-item" id="export-for-monitor">Export for Monitor</div>
+                    </div>
+                </div>
+                <div class="menu-item">
+                    Edit
+                    <div class="menu-dropdown">
+                        <div class="menu-dropdown-item" id="undo">Undo</div>
+                        <div class="menu-dropdown-item" id="redo">Redo</div>
+                    </div>
+                </div>
+                <div class="menu-item">
+                    View
+                    <div class="menu-dropdown">
+                        <div class="menu-dropdown-item" id="toggle-guides">Show Guides</div>
+                        <div class="menu-dropdown-item" id="toggle-labels">Show Labels</div>
+                        <div class="menu-dropdown-item" id="toggle-preview">Preview Mode</div>
+                    </div>
+                </div>
+            </div>
+            <div class="canvas-container">
+                <canvas id="waveform-canvas"></canvas>
+                <div class="resize-handle"></div>
+            </div>
+            <div class="toolbar">
+                <button id="add-point" title="Add Point">
+                    <i class="fas fa-plus"></i>
+                </button>
+                <button id="delete-point" title="Delete Point">
+                    <i class="fas fa-trash"></i>
+                </button>
+                <button id="toggle-type" title="Toggle Point Type">
+                    <i class="fas fa-exchange-alt"></i>
+                </button>
+                <button id="move-to-baseline" title="Move to Baseline">
+                    <i class="fas fa-arrows-alt-v"></i>
+                </button>
+                <button id="transform-points" title="Transform Points">
+                    <i class="fas fa-expand-arrows-alt"></i>
+                </button>
+                <button id="toggle-star" title="Toggle Star">
+                    <i class="fas fa-star"></i>
+                </button>
+            </div>
+        </div>
+        <div class="sidebar">
+            <button class="sidebar-collapse-btn">&lt;</button>
+            <h3>Points</h3>
+            <div class="point-list"></div>
+            <div class="scratchpad">
+                <h3>Scratchpad</h3>
+                <textarea placeholder="Add notes here..."></textarea>
+            </div>
+        </div>
+    </div>
+    <script type="module" src="js/index.js"></script>
+</body>
+</html> 
